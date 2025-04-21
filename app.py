@@ -22,11 +22,11 @@ st.title("PERBANDINGAN PERFORMA ALGORITMA RANDOM FOREST DAN SUPPORT VECTOR MACHI
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    train_percent = st.selectbox("Pilih persentase Training data:", [60, 70, 75, 80, 90])
+    train_percent = st.selectbox("Pilih Persentase Training Data:", [60, 70, 75, 80, 90])
 with col2:
-    test_percent = st.selectbox("Pilih persentase Testing data:", [5, 10, 20, 30])
+    test_percent = st.selectbox("Pilih Persentase Testing Data:", [5, 10, 20, 30])
 with col3:
-    forecast_percent = st.selectbox("Pilih persentase Forecasting data:", [5, 10])
+    forecast_percent = st.selectbox("Pilih Persentase Forecasting Data:", [5, 10])
 
 total = train_percent + test_percent + forecast_percent
 
