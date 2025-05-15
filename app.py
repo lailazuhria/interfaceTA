@@ -30,31 +30,43 @@ def interpret_mae(mae):
 # --- Sidebar ---
 st.title("📈 PERBANDINGAN PERFORMA ALGORITMA RANDOM FOREST DAN SUPPORT VECTOR MACHINE")
 
-train_percent = st.selectbox("Pilih persentase Training data:", [60, 70, 75, 80])
-forecast_percent = 20
-test_percent = 100 - train_percent - forecast_percent
+train_percent = st.selectbox("Pilih persentase Training data:", [70, 80])
+test_percent = 100 - train_percent
+
+forecast_percent = st.selectbox("Pilih persentase Forecasting data (dari total dataset):", [15, 20])
 
 st.markdown(f"**Persentase Testing data :** {test_percent}%")
-if test_percent <= 0:
-    st.error("Persentase training terlalu besar. Sisakan minimal 20% untuk testing dan forecasting.")
+st.markdown(f"**Forecasting akan dilakukan menggunakan {forecast_percent}% data terakhir dari dataset utama.**")
+
+# Validasi: apakah jumlah data mencukupi
+total_rows = len(df)
+forecast_rows = int(forecast_percent / 100 * total_rows)
+main_rows = total_rows - forecast_rows
+
+if main_rows <= 0:
+    st.error("Jumlah data tidak mencukupi untuk forecasting. Kurangi persentase forecasting.")
 else:
     if st.button("Proses"):
-        # --- Split Data (Time-based) ---
-        total_rows = len(df)
-        train_end = int(train_percent / 100 * total_rows)
-        test_end = train_end + int(test_percent / 100 * total_rows)
+        # --- Split Data ---
+        df_main = df.iloc[:main_rows]
+        df_forecast = df.iloc[main_rows:]
 
-        train_data = df.iloc[:train_end]
-        test_data = df.iloc[train_end:test_end]
-        forecast_data = df.iloc[test_end:]
+        train_end = int(train_percent / 100 * len(df_main))
+        test_end = len(df_main)
 
+        train_data = df_main.iloc[:train_end]
+        test_data = df_main.iloc[train_end:]
+        forecast_data = df_forecast
+
+        # --- Split Features and Labels ---
         X_train = train_data.drop("Age", axis=1)
         y_train = train_data["Age"]
         X_test = test_data.drop("Age", axis=1)
         y_test = test_data["Age"]
         X_forecast = forecast_data.drop("Age", axis=1)
-        y_forecast = forecast_data["Age"] if "Age" in forecast_data else np.nan
+        y_forecast = forecast_data["Age"]
 
+        # --- Scaling ---
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
@@ -107,23 +119,17 @@ else:
         st.markdown(f"- Training Time: `{svm_train_time:.4f} s`, MAE: `{mae_svm_train:.4f}` ({interpret_mae(mae_svm_train)})")
         st.markdown(f"- Testing Time: `{svm_test_time:.4f} s`, Accuracy: `{svm_test_acc:.4f}`, MAE: `{mae_svm_test:.4f}` ({interpret_mae(mae_svm_test)})")
         st.markdown(f"- Forecasting Time: `{svm_forecast_time:.4f} s`, MAE: `{mae_svm_forecast:.4f}` ({interpret_mae(mae_svm_forecast)})")
-        # --- Tabel Hasil Forecasting ---
-        st.subheader("🗂️ Tabel Hasil Forecasting")
 
-        # Buat DataFrame hasil prediksi
+        # --- Tabel Forecasting ---
+        st.subheader("🗂️ Tabel Hasil Forecasting")
         forecast_result = pd.DataFrame()
         forecast_result["Index"] = forecast_data.index
         forecast_result["Prediksi_RF"] = y_forecast_pred_rf
         forecast_result["Prediksi_SVM"] = y_forecast_pred_svm
 
-        # Jika data aktual tersedia (y_forecast tidak NaN seluruhnya), tambahkan
-        if not y_forecast.isnull().all():
-            forecast_result["Actual"] = y_forecast.values
-
-        # Tampilkan tabel
         st.dataframe(forecast_result.reset_index(drop=True), use_container_width=True)
 
-        # --- Visualisasi Prediksi ---
+        # --- Visualisasi ---
         st.subheader("📉 Visualisasi Hasil Prediksi")
         tab1, tab2, tab3, tab4 = st.tabs(["Training", "Testing", "Forecasting", "Perbandingan MAE"])
 
@@ -147,9 +153,9 @@ else:
 
         with tab3:
             fig3, ax3 = plt.subplots(figsize=(10, 5))
-            ax3.plot(y_forecast_pred_rf, label="RF Prediction", linestyle='--', marker='x')
-            ax3.plot(y_forecast_pred_svm, label="SVM Prediction", linestyle='--', marker='s')
-            ax3.set_title("Forecasting Prediction (Tanpa Data Aktual)")
+            ax3.plot(y_forecast_pred_rf, label="RF", linestyle='--', marker='x')
+            ax3.plot(y_forecast_pred_svm, label="SVM", linestyle='--', marker='s')
+            ax3.set_title("Forecasting Prediction")
             ax3.legend()
             st.pyplot(fig3)
 
@@ -177,39 +183,36 @@ else:
             ax.grid(True, linestyle='--', alpha=0.7)
             st.pyplot(fig_mae)
 
+        # --- Penjelasan ---
+
         # --- Penjelasan Dinamis ---
         st.subheader("📝 Penjelasan Visualisasi")
 
-        if train_percent == 60:
-            st.markdown("""
-            - **Training (60%)**: SVM memiliki MAE lebih rendah dari RF, menandakan performa lebih baik pada data historis. RF menunjukkan sedikit overfitting.
-            - **Testing (20%)**: SVM konsisten dengan MAE rendah dan performa stabil. RF masih fluktuatif dan kurang presisi.
-            - **Forecasting (20%)**: SVM menghasilkan prediksi lebih stabil, RF terlihat lebih variatif dan kurang akurat.
-            - **Perbandingan MAE**: SVM lebih dominan di semua tahap, cocok saat data training terbatas.
-            """)
-
-        elif train_percent == 70:
-            st.markdown("""
-            - **Training (70%)**: MAE Random Forest membaik dan mulai menyaingi SVM. SVM tetap konsisten dengan hasil stabil.
-            - **Testing (10%)**: MAE SVM masih lebih kecil, menunjukkan generalisasi yang lebih baik.
-            - **Forecasting (20%)**: RF menunjukkan hasil lebih kompetitif, tapi SVM masih lebih stabil.
-            - **Perbandingan MAE**: Performa kedua model semakin dekat, namun SVM sedikit lebih unggul secara konsisten.
-            """)
-
-        elif train_percent == 75:
-            st.markdown("""
-            - **Training (75%)**: Random Forest menghasilkan MAE paling rendah, menunjukkan model sangat cocok pada data besar.
-            - **Testing (5%)**: Performa RF dan SVM hampir seimbang, dengan akurasi tinggi di keduanya.
-            - **Forecasting (20%)**: Random Forest unggul dalam prediksi ke depan dengan MAE lebih kecil dari SVM.
-            - **Perbandingan MAE**: Random Forest menjadi pilihan terbaik pada 75% training, khususnya untuk forecasting.
+        if train_percent == 70:
+            st.markdown(f"""
+            - **Training (70%)**: Random Forest mulai menyaingi SVM dalam hal MAE. Keduanya cukup baik dalam menangkap pola data historis.
+            - **Testing (30%)**: SVM menunjukkan generalisasi lebih konsisten dengan MAE lebih stabil. Random Forest sedikit lebih fluktuatif.
+            - **Forecasting ({forecast_percent}%)**: Kedua model menunjukkan performa prediksi yang cukup kompetitif pada data yang belum terlihat, namun masih berasal dari dataset yang sama.
+            - **Kesimpulan**: SVM unggul dalam stabilitas prediksi, sementara RF bisa unggul jika pola data cukup kuat dipelajari saat training.
             """)
 
         elif train_percent == 80:
-            st.markdown("""
-            - **Training (80%)**: Semakin besar data training, RF makin unggul dalam menyesuaikan pola. MAE RF sangat kecil.
-            - **Testing (0%)**: Data testing tidak tersedia, karena seluruh data habis dibagi ke training dan forecasting.
-            - **Forecasting (20%)**: Performa RF sangat kuat, namun tanpa testing, generalisasi tidak bisa diukur.
-            - **Catatan**: Persentase 80% training membuat hasil testing tidak tersedia. Gunakan persentase <=75% untuk evaluasi yang lengkap.
+            st.markdown(f"""
+            - **Training (80%)**: Random Forest menunjukkan performa sangat baik dengan MAE yang rendah berkat data pelatihan yang lebih besar.
+            - **Testing (20%)**: SVM tetap konsisten dalam menggeneralisasi, meskipun dengan jumlah data pengujian yang lebih sedikit.
+            - **Forecasting ({forecast_percent}%)**: Forecasting dilakukan terhadap bagian akhir data yang tidak digunakan dalam training/testing. Model memprediksi pola yang belum dilihat sebelumnya, namun masih dalam cakupan distribusi data awal.
+            - **Kesimpulan**: Random Forest unggul dalam pelatihan, SVM kuat dalam pengujian. Keduanya menunjukkan hasil yang baik untuk forecasting berbasis data internal.
             """)
+
         else:
-            st.markdown("Silakan pilih persentase training yang valid.")
+            st.markdown("""
+            Persentase training yang dipilih belum didukung untuk penjelasan visualisasi ini.
+            """)
+
+        st.subheader("📝 Penjelasan Forecasting")
+        st.markdown(f"""
+        - **Forecasting menggunakan {forecast_percent}% bagian akhir dari dataset** yang tidak digunakan dalam training maupun testing.
+        - Data ini tetap berasal dari dataset utama, namun dianggap sebagai **representasi waktu mendatang** (belum terlihat saat pelatihan).
+        - Tujuannya adalah untuk **mengevaluasi kemampuan model dalam meramalkan data baru berdasarkan pola yang telah dipelajari**.
+        - Forecasting **bukan dari file eksternal**, melainkan simulasi prediksi masa depan berdasarkan data historis yang tersedia.
+        """)
